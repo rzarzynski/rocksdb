@@ -253,6 +253,10 @@ inline void PutLengthPrefixedSliceParts(std::string* dst,
   for (int i = 0; i < slice_parts.num_parts; ++i) {
     total_bytes += slice_parts.parts[i].size();
   }
+  const size_t new_size = dst->size() + 4 + total_bytes;
+  if (new_size > dst->capacity()) {
+    dst->reserve(new_size);
+  }
   PutVarint32(dst, static_cast<uint32_t>(total_bytes));
   for (int i = 0; i < slice_parts.num_parts; ++i) {
     dst->append(slice_parts.parts[i].data(), slice_parts.parts[i].size());
