@@ -449,7 +449,11 @@ void MemTable::Add(SequenceNumber s, ValueType type,
       Slice prefix = insert_with_hint_prefix_extractor_->Transform(key_slice);
       table->InsertWithHint(handle, &insert_hints_[prefix]);
     } else {
-      table->Insert(handle);
+      // let's assume we're Add()ing a fully sorted set of KVs.
+      // NOTE: this could be moved to an externally-supplied extractor
+      // and married there with e.g. capped extraction as a fallback.
+      thread_local void* lru_hint;
+      table->InsertWithHint(handle, &lru_hint);
     }
 
     // this is a bit ugly, but is the way to avoid locked instructions
