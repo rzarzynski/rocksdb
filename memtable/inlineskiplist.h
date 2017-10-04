@@ -672,6 +672,19 @@ void InlineSkipList<Comparator>::RecomputeSpliceLevels(const char* key,
   }
 }
 
+uint32_t previous_power_of_two( uint32_t x ) {
+    if (x == 0) {
+        return 0;
+    }
+    // x--; Uncomment this, if you want a strictly less than 'x' result.
+    x |= (x >> 1);
+    x |= (x >> 2);
+    x |= (x >> 4);
+    x |= (x >> 8);
+    x |= (x >> 16);
+    return x - (x >> 1);
+}
+
 template <class Comparator>
 template <bool UseCAS>
 void InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
@@ -730,9 +743,15 @@ void InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
     // A good strategy is probably to be pessimistic for seq_splice_,
     // optimistic if the caller actually went to the work of providing
     // a Splice.
-    while (recompute_height < max_height) {
-      if (splice->prev_[recompute_height]->Next(recompute_height) !=
-          splice->next_[recompute_height]) {
+    for (uint32_t step = previous_power_of_two(max_height);
+         step > 0; step /= 2) {
+      const auto idx = recompute_height + step - 1;
+
+      if (idx >= static_cast<uint32_t>(max_height)) {
+        continue;
+      }
+
+      if (splice->prev_[idx]->Next(idx) != splice->next_[idx]) {
         // splice isn't tight at this level, there must have been some inserts
         // to this
         // location that didn't update the splice.  We might only be a little
@@ -742,33 +761,16 @@ void InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
         // our budget of comparisons, so always move up even if we are
         // pessimistic about
         // our chances of success.
-        ++recompute_height;
-      } else if (splice->prev_[recompute_height] != head_ &&
-                 !KeyIsAfterNode(key, splice->prev_[recompute_height])) {
+        recompute_height += step;
+      } else if (splice->prev_[idx] != head_ &&
+                 !KeyIsAfterNode(key, splice->prev_[idx])) {
         // key is from before splice
-        if (allow_partial_splice_fix) {
-          // skip all levels with the same node without more comparisons
-          Node* bad = splice->prev_[recompute_height];
-          while (splice->prev_[recompute_height] == bad) {
-            ++recompute_height;
-          }
-        } else {
-          // we're pessimistic, recompute everything
-          recompute_height = max_height;
-        }
-      } else if (KeyIsAfterNode(key, splice->next_[recompute_height])) {
+        recompute_height += step;
+      } else if (KeyIsAfterNode(key, splice->next_[idx])) {
         // key is from after splice
-        if (allow_partial_splice_fix) {
-          Node* bad = splice->next_[recompute_height];
-          while (splice->next_[recompute_height] == bad) {
-            ++recompute_height;
-          }
-        } else {
-          recompute_height = max_height;
-        }
+        recompute_height += step;
       } else {
         // this level brackets the key, we won!
-        break;
       }
     }
   }
