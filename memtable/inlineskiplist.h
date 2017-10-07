@@ -201,6 +201,12 @@ class InlineSkipList {
 
   Node* AllocateNode(size_t key_size, int height);
 
+  bool CanBeOutdated(Splice* const splice) {
+    // TODO: We would need to deduce whether the someone has used any other
+    // splice since its last update. Seems possible.
+    return false;
+  }
+
   bool Equal(const char* a, const char* b) const {
     return (compare_(a, b) == 0);
   }
@@ -740,8 +746,9 @@ void InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
     // optimistic if the caller actually went to the work of providing
     // a Splice.
     while (recompute_height < max_height) {
-      if (splice->prev_[recompute_height]->Next(recompute_height) !=
-          splice->next_[recompute_height]) {
+      if (CanBeOutdated(splice) &&
+          splice->prev_[recompute_height]->Next(recompute_height) !=
+            splice->next_[recompute_height]) {
         // splice isn't tight at this level, there must have been some inserts
         // to this
         // location that didn't update the splice.  We might only be a little
@@ -755,6 +762,8 @@ void InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
       } else if (splice->prev_[recompute_height] != head_ &&
                  !KeyIsAfterNode(key, splice->prev_[recompute_height])) {
         // key is from before splice
+        // TODO: For the sake of FAST sequential splice we might want to cache
+        // e.g. the two 0-level keys drectly in Splice.
         if (allow_partial_splice_fix) {
           // skip all levels with the same node without more comparisons
           Node* bad = splice->prev_[recompute_height];
@@ -817,7 +826,7 @@ void InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
     }
   } else {
     for (int i = 0; i < height; ++i) {
-      if (i >= recompute_height &&
+      if (CanBeOutdated(splice) && i >= recompute_height &&
           splice->prev_[i]->Next(i) != splice->next_[i]) {
         FindSpliceForLevel<false>(key, splice->prev_[i], nullptr, i, &splice->prev_[i],
                            &splice->next_[i]);
@@ -828,7 +837,9 @@ void InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
              compare_(splice->prev_[i]->Key(), x->Key()) < 0);
       assert(splice->prev_[i]->Next(i) == splice->next_[i]);
       x->NoBarrier_SetNext(i, splice->next_[i]);
-      splice->prev_[i]->SetNext(i, x);
+      // TODO: If we would have batched operations in memtables, we could
+      // DRASTICALLY reduce the number of SetNext()s.
+      //splice->prev_[i]->SetNext(i, x);
     }
   }
   if (splice_is_valid) {
