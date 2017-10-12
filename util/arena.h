@@ -104,6 +104,8 @@ class Arena : public Allocator {
   size_t alloc_bytes_remaining_ = 0;
 
 #ifdef MAP_HUGETLB
+  char* hugetlb_addr = nullptr;
+  size_t hugetlb_left = 0;
   size_t hugetlb_size_ = 0;
 #endif  // MAP_HUGETLB
   char* AllocateFromHugePage(size_t bytes);

@@ -115,7 +115,7 @@ char* Arena::AllocateFallback(size_t bytes, bool aligned) {
 char* Arena::AllocateFromHugePage(size_t bytes) {
 #ifdef MAP_HUGETLB
   if (hugetlb_size_ == 0) {
-    return nullptr;
+  //  return nullptr;
   }
   // already reserve space in huge_blocks_ before calling mmap().
   // this way the insertion into the vector below will not throw and we
@@ -142,32 +142,40 @@ char* Arena::AllocateAligned(size_t bytes, size_t huge_page_size,
                              Logger* logger) {
   assert((kAlignUnit & (kAlignUnit - 1)) ==
          0);  // Pointer size should be a power of 2
+  size_t current_mod =
+      reinterpret_cast<uintptr_t>(aligned_alloc_ptr_) & (kAlignUnit - 1);
+  size_t slop = (current_mod == 0 ? 0 : kAlignUnit - current_mod);
+  size_t needed = bytes + slop;
+
+  char* result;
 
 #ifdef MAP_HUGETLB
-  if (huge_page_size > 0 && bytes > 0) {
+  if (huge_page_size > 0 && needed > 0) {
     // Allocate from a huge page TBL table.
     assert(logger != nullptr);  // logger need to be passed in.
     size_t reserved_size =
-        ((bytes - 1U) / huge_page_size + 1U) * huge_page_size;
+        ((needed - 1U) / huge_page_size + 1U) * huge_page_size;
     assert(reserved_size >= bytes);
 
-    char* addr = AllocateFromHugePage(reserved_size);
-    if (addr == nullptr) {
+    if (hugetlb_left < needed || !hugetlb_addr) {
+      hugetlb_addr = AllocateFromHugePage(reserved_size);
+      hugetlb_left = reserved_size;
+    }
+
+    if (hugetlb_addr == nullptr) {
       ROCKS_LOG_WARN(logger,
                      "AllocateAligned fail to allocate huge TLB pages: %s",
                      strerror(errno));
       // fail back to malloc
     } else {
-      return addr;
+      result = hugetlb_addr;
+      hugetlb_addr += needed;
+      hugetlb_left -= needed;
+      return result;
     }
   }
 #endif
 
-  size_t current_mod =
-      reinterpret_cast<uintptr_t>(aligned_alloc_ptr_) & (kAlignUnit - 1);
-  size_t slop = (current_mod == 0 ? 0 : kAlignUnit - current_mod);
-  size_t needed = bytes + slop;
-  char* result;
   if (needed <= alloc_bytes_remaining_) {
     result = aligned_alloc_ptr_ + slop;
     aligned_alloc_ptr_ += needed;
