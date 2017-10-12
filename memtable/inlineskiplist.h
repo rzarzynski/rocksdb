@@ -591,7 +591,8 @@ InlineSkipList<Comparator>::AllocateNode(size_t key_size, int height) {
   // raw + prefix, and holds the bottom-mode (level 0) skip list pointer
   // next_[0].  key_size is the bytes for the key, which comes just after
   // the Node.
-  char* raw = allocator_->AllocateAligned(prefix + sizeof(Node) + key_size);
+  const size_t wants = prefix + sizeof(Node) + key_size;
+  char* raw = allocator_->AllocateAligned(wants, 1024 * 2048);
   Node* x = reinterpret_cast<Node*>(raw + prefix);
 
   // Once we've linked the node into the skip list we don't actually need
