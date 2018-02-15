@@ -203,22 +203,6 @@ void MemTable::UpdateFlushState() {
   }
 }
 
-int MemTable::KeyComparator::operator()(const char* prefix_len_key1,
-                                        const char* prefix_len_key2) const {
-  // Internal keys are encoded as length-prefixed strings.
-  Slice k1 = GetLengthPrefixedSlice(prefix_len_key1);
-  Slice k2 = GetLengthPrefixedSlice(prefix_len_key2);
-  return comparator.Compare(k1, k2);
-}
-
-int MemTable::KeyComparator::operator()(const char* prefix_len_key,
-                                        const Slice& key)
-    const {
-  // Internal keys are encoded as length-prefixed strings.
-  Slice a = GetLengthPrefixedSlice(prefix_len_key);
-  return comparator.Compare(a, key);
-}
-
 Slice MemTableRep::UserKey(const char* key) const {
   Slice slice = GetLengthPrefixedSlice(key);
   return Slice(slice.data(), slice.size() - 8);
