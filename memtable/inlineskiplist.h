@@ -709,7 +709,8 @@ template <bool UseCAS>
 bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
                                         bool allow_partial_splice_fix) {
   Node* x = reinterpret_cast<Node*>(const_cast<char*>(key)) - 1;
-  const Slice key_slice = GetLengthPrefixedSlice(key);
+  const typename Comparator::DecodedType key_slice = \
+    Comparator::decode_key(key);
   int height = x->UnstashHeight();
   assert(height >= 1 && height <= kMaxHeight_);
 
